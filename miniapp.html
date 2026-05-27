@@ -1,1 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="theme-color" content="#0d0720"/>
+<title>Smart Reminder</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  /* ── Reset & Root ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+  :root {
+    --bg-base:    #0d0720;
+    --bg-card:    #16092e;
+    --bg-input:   #1f0f3d;
+    --bg-pill:    #2a1450;
+    --accent:     #a855f7;
+    --accent2:    #7c3aed;
+    --accent3:    #e879f9;
+    --glow:       rgba(168,85,247,0.35);
+    --glow-sm:    rgba(168,85,247,0.18);
+    --text-main:  #f0e6ff;
+    --text-sub:   #9d7ec7;
+    --text-muted: #5b4680;
+    --green:      #34d399;
+    --green-bg:   rgba(52,211,153,0.12);
+    --red:        #f87171;
+    --red-bg:     rgba(248,113,113,0.1);
+    --amber:      #fbbf24;
+    --amber-bg:   rgba(251,191,36,0.1);
+    --radius:     16px;
+    --radius-sm:  10px;
+    --transition: 0.22s cubic-bezier(0.4,0,0.2,1);
+    --font-head:  'Syne', sans-serif;
+    --font-body:  'DM Sans', sans-serif;
+  }
+
+  html { height: 100%; }
+  body {
+    font-family: var(--font-body);
+    background: var(--bg-base);
+    color: var(--text-main);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Noise Grain Overlay ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.6;
+  }
+
+  /* ── Ambient Glow Blobs ── */
+  .blob {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 0;
+    animation: float 8s ease-in-out infinite;
+  }
+  .blob-1 { width: 320px; height: 320px; background: rgba(124,58,237,0.18); top: -60px; right: -80px; }
+  .blob-2 { width: 240px; height: 240px; background: rgba(232,121,249,0.10); bottom: 80px; left: -60px; animation-delay: -4s; }
+  @keyframes float {
+    0%,100% { transform: translateY(0px) scale(1); }
+    50%      { transform: translateY(-20px) scale(1.04); }
+  }
+
+  /* ── Layout Wrapper ── */
+  .app {
+    position: relative;
+    z-index: 1;
+    max-width: 430px;
+    margin: 0 auto;
+    padding: 0 0 100px;
+  }
+
+  /* ── Header ── */
+  .header {
+    padding: 20px 20px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .header-icon {
+    width: 38px; height: 38px;
+    background: linear-gradient(135deg, var(--accent2), var(--accent3));
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    box-shadow: 0 4px 16px var(--glow);
+  }
+  .header-title {
+    font-family: var(--font-head);
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    background: linear-gradient(90deg, #e9d5ff, #a855f7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .header-sub { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+
+  /* ── Stats Row ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin: 18px 20px 0;
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid rgba(168,85,247,0.12);
+    border-radius: var(--radius-sm);
+    padding: 12px 10px;
+    text-align: center;
+    transition: var(--transition);
+  }
+  .stat-card:hover { border-color: rgba(168,85,247,0.3); }
+  .stat-num {
+    font-family: var(--font-head);
+    font-size: 24px;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .stat-num.purple { color: var(--accent); }
+  .stat-num.green  { color: var(--green);  }
+  .stat-num.amber  { color: var(--amber);  }
+  .stat-label { font-size: 10px; color: var(--text-muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* ── Section ── */
+  .section { margin: 22px 20px 0; }
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .section-title {
+    font-family: var(--font-head);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-sub);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 20px;
+    background: var(--bg-pill);
+    color: var(--accent);
+  }
+
+  /* ── Add Task Card ── */
+  .add-card {
+    background: var(--bg-card);
+    border: 1px solid rgba(168,85,247,0.18);
+    border-radius: var(--radius);
+    padding: 18px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  .form-group { margin-bottom: 14px; }
+  .form-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 7px;
+  }
+  .form-input {
+    width: 100%;
+    background: var(--bg-input);
+    border: 1.5px solid rgba(168,85,247,0.15);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    color: var(--text-main);
+    font-family: var(--font-body);
+    font-size: 14px;
+    outline: none;
+    transition: var(--transition);
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .form-input::placeholder { color: var(--text-muted); }
+  .form-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--glow-sm);
+  }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .btn-add {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    color: #fff;
+    font-family: var(--font-head);
+    font-size: 15px;
+    font-weight: 700;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 4px 20px var(--glow);
+    letter-spacing: 0.2px;
+    margin-top: 4px;
+  }
+  .btn-add:active { transform: scale(0.97); }
+  .btn-add:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn-add .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+  .btn-add.loading .spinner { display: block; }
+  .btn-add.loading .btn-text { display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Tab Row ── */
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin: 22px 20px 0;
+    background: var(--bg-card);
+    border: 1px solid rgba(168,85,247,0.1);
+    padding: 5px;
+    border-radius: var(--radius-sm);
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 9px 6px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-head);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition);
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+  .tab-btn.active {
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    color: #fff;
+    box-shadow: 0 2px 10px var(--glow-sm);
+  }
+
+  /* ── Reminder Cards ── */
+  .reminder-list { margin: 14px 20px 0; display: flex; flex-direction: column; gap: 10px; }
+
+  .reminder-card {
+    background: var(--bg-card);
+    border: 1px solid rgba(168,85,247,0.12);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    transition: var(--transition);
+    animation: slideIn 0.3s ease forwards;
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  @keyframes slideIn {
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .reminder-card.removing {
+    animation: slideOut 0.25s ease forwards;
+  }
+  @keyframes slideOut {
+    to { opacity: 0; transform: translateX(40px); }
+  }
+  .reminder-card:hover { border-color: rgba(168,85,247,0.25); transform: translateY(-1px); }
+
+  .task-check {
+    width: 22px; height: 22px;
+    min-width: 22px;
+    border-radius: 50%;
+    border: 2px solid rgba(168,85,247,0.4);
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+    margin-top: 1px;
+  }
+  .task-check:hover { border-color: var(--accent); background: var(--glow-sm); }
+  .task-check.done {
+    border-color: var(--green);
+    background: var(--green-bg);
+  }
+  .task-check.done::after { content: '✓'; font-size: 12px; color: var(--green); font-weight: 700; }
+
+  .task-body { flex: 1; min-width: 0; }
+  .task-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-main);
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .task-name.completed {
+    text-decoration: line-through;
+    color: var(--text-muted);
+  }
+  .task-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 5px;
+  }
+  .task-chip {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--text-sub);
+    background: var(--bg-pill);
+    padding: 3px 8px;
+    border-radius: 20px;
+  }
+  .task-chip .icon { font-size: 10px; }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    margin-top: 7px;
+  }
+  .status-dot.pending   { background: var(--amber); box-shadow: 0 0 6px rgba(251,191,36,0.5); animation: pulse-dot 2s ease-in-out infinite; }
+  .status-dot.completed { background: var(--green);  }
+  .status-dot.notified  { background: var(--accent); box-shadow: 0 0 6px var(--glow); }
+  @keyframes pulse-dot {
+    0%,100% { opacity:1; } 50% { opacity:0.4; }
+  }
+
+  .btn-delete {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px;
+    border-radius: 6px;
+    transition: var(--transition);
+    line-height: 1;
+    margin-top: 1px;
+  }
+  .btn-delete:hover { color: var(--red); background: var(--red-bg); }
+
+  /* ── Empty State ── */
+  .empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    animation: fadeIn 0.4s ease;
+  }
+  .empty-icon { font-size: 48px; margin-bottom: 14px; opacity: 0.6; }
+  .empty-title {
+    font-family: var(--font-head);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-sub);
+    margin-bottom: 6px;
+  }
+  .empty-text { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+
+  /* ── Toast ── */
+  .toast-container {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .toast {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 18px;
+    border-radius: 30px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #fff;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    animation: toastIn 0.3s ease forwards;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .toast.success { background: rgba(52,211,153,0.2); border: 1px solid rgba(52,211,153,0.3); }
+  .toast.error   { background: rgba(248,113,113,0.2); border: 1px solid rgba(248,113,113,0.3); }
+  .toast.info    { background: rgba(168,85,247,0.2);  border: 1px solid rgba(168,85,247,0.3); }
+  @keyframes toastIn {
+    from { opacity:0; transform:translateY(12px) scale(0.9); }
+    to   { opacity:1; transform:translateY(0)    scale(1); }
+  }
+  @keyframes toastOut {
+    to { opacity:0; transform:translateY(-8px) scale(0.9); }
+  }
+  @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+
+  /* ── Loading Skeleton ── */
+  .skeleton {
+    background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-pill) 50%, var(--bg-card) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: var(--radius-sm);
+    height: 68px;
+  }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  /* ── Date colour helper ── */
+  .overdue   { color: var(--red) !important; }
+  .due-today { color: var(--amber) !important; }
+</style>
+</head>
+<body>
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-brand">
+      <div class="header-icon">⏰</div>
+      <div>
+        <div class="header-title">Smart Reminders</div>
+        <div class="header-sub" id="headerSub">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-num amber" id="statPending">—</div>
+      <div class="stat-label">Pending</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num green" id="statDone">—</div>
+      <div class="stat-label">Done</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num purple" id="statNotified">—</div>
+      <div class="stat-label">Notified</div>
+    </div>
+  </div>
+
+  <!-- Add Task -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">Add Task</div>
+    </div>
+    <div class="add-card">
+      <div class="form-group">
+        <label class="form-label">Task Name</label>
+        <input id="taskInput" class="form-input" type="text" placeholder="What do you need to do?" maxlength="200"/>
+      </div>
+      <div class="form-row form-group">
+        <div>
+          <label class="form-label">Date</label>
+          <input id="dateInput" class="form-input" type="date"/>
+        </div>
+        <div>
+          <label class="form-label">Time</label>
+          <input id="timeInput" class="form-input" type="time"/>
+        </div>
+      </div>
+      <button class="btn-add" id="addBtn" onclick="addReminder()">
+        <span class="spinner"></span>
+        <span class="btn-text">＋ Add Reminder</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('pending', this)">⏳ Pending</button>
+    <button class="tab-btn"       onclick="switchTab('all', this)">📋 All</button>
+    <button class="tab-btn"       onclick="switchTab('completed', this)">✅ Done</button>
+  </div>
+
+  <!-- Reminder List -->
+  <div class="section-header" style="margin: 16px 20px 0;">
+    <div class="section-title">Reminders</div>
+    <div class="badge" id="listBadge">0</div>
+  </div>
+  <div class="reminder-list" id="reminderList">
+    <div class="skeleton"></div>
+    <div class="skeleton"></div>
+    <div class="skeleton"></div>
+  </div>
+
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ── Telegram Web App Init ──────────────────────────────────────
+const tg = window.Telegram?.WebApp;
+if (tg) {
+  tg.ready();
+  tg.expand();
+  tg.setHeaderColor("#0d0720");
+  tg.setBackgroundColor("#0d0720");
+}
+
+// ── API Base URL (auto-detects Railway or local) ──────────────
+const BASE_URL = window.location.origin;
+
+// ── State ─────────────────────────────────────────────────────
+let currentTab  = "pending";
+let allData     = [];
+
+// ── Greeting ──────────────────────────────────────────────────
+function setGreeting() {
+  const now  = new Date();
+  const h    = now.getHours();
+  const greet = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  const name  = tg?.initDataUnsafe?.user?.first_name || "Shark";
+  document.getElementById("headerSub").textContent = `${greet}, ${name} 👋`;
+}
+
+// ── Helpers ───────────────────────────────────────────────────
+function today() {
+  return new Date().toISOString().split("T")[0];
+}
+function fmtDate(d) {
+  const parts = d.split("-");
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${parseInt(parts[2])} ${months[parseInt(parts[1])-1]}`;
+}
+function fmtTime(t) {
+  const [h, m] = t.split(":");
+  const hh = parseInt(h);
+  const ampm = hh >= 12 ? "PM" : "AM";
+  return `${(hh % 12 || 12).toString().padStart(2,"0")}:${m} ${ampm}`;
+}
+function dateClass(d) {
+  if (d < today()) return "overdue";
+  if (d === today()) return "due-today";
+  return "";
+}
+
+// ── Toast ─────────────────────────────────────────────────────
+function toast(msg, type = "info") {
+  const icon = type === "success" ? "✅" : type === "error" ? "❌" : "ℹ️";
+  const el   = document.createElement("div");
+  el.className = `toast ${type}`;
+  el.textContent = `${icon} ${msg}`;
+  const container = document.getElementById("toastContainer");
+  container.appendChild(el);
+  setTimeout(() => {
+    el.style.animation = "toastOut 0.3s ease forwards";
+    setTimeout(() => el.remove(), 300);
+  }, 2800);
+}
+
+// ── Set default date/time ─────────────────────────────────────
+function setDefaults() {
+  const now = new Date();
+  const dateStr = now.toISOString().split("T")[0];
+  now.setMinutes(now.getMinutes() + 30);
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  document.getElementById("dateInput").value = dateStr;
+  document.getElementById("timeInput").value = `${hh}:${mm}`;
+  document.getElementById("dateInput").min = dateStr;
+}
+
+// ── Stats ─────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const res  = await fetch(`${BASE_URL}/api/stats`);
+    const json = await res.json();
+    if (json.success) {
+      document.getElementById("statPending").textContent  = json.data.pending   || 0;
+      document.getElementById("statDone").textContent     = json.data.completed || 0;
+      document.getElementById("statNotified").textContent = json.data.notified  || 0;
+    }
+  } catch(e) {}
+}
+
+// ── Fetch Reminders ───────────────────────────────────────────
+async function loadReminders() {
+  try {
+    const url  = currentTab === "all"
+      ? `${BASE_URL}/api/reminders`
+      : `${BASE_URL}/api/reminders?status=${currentTab}`;
+    const res  = await fetch(url);
+    const json = await res.json();
+    if (json.success) {
+      allData = json.data;
+      renderList(allData);
+      document.getElementById("listBadge").textContent = allData.length;
+    }
+  } catch(e) {
+    document.getElementById("reminderList").innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🔌</div>
+        <div class="empty-title">Connection Error</div>
+        <div class="empty-text">Could not reach the server.<br>Check your network.</div>
+      </div>`;
+  }
+}
+
+// ── Render List ───────────────────────────────────────────────
+function renderList(data) {
+  const list = document.getElementById("reminderList");
+  if (!data.length) {
+    list.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">${currentTab==="completed"?"🎉":"📭"}</div>
+        <div class="empty-title">${currentTab==="completed"?"All caught up!":"Nothing here"}</div>
+        <div class="empty-text">${
+          currentTab==="pending"   ? "Add a reminder above to get started." :
+          currentTab==="completed" ? "Completed tasks will appear here."   :
+          "No reminders found."
+        }</div>
+      </div>`;
+    return;
+  }
+  list.innerHTML = data.map((r, i) => `
+    <div class="reminder-card" id="card-${r.id}" style="animation-delay:${i*40}ms">
+      <div class="task-check ${r.status==="completed"?"done":""}"
+           onclick="markComplete(${r.id})"
+           title="Mark complete">
+      </div>
+      <div class="task-body">
+        <div class="task-name ${r.status==="completed"?"completed":""}">${escHtml(r.task)}</div>
+        <div class="task-meta">
+          <span class="task-chip ${dateClass(r.reminder_date)}">
+            <span class="icon">📅</span>${fmtDate(r.reminder_date)}
+          </span>
+          <span class="task-chip">
+            <span class="icon">🕐</span>${fmtTime(r.reminder_time)}
+          </span>
+          <span class="task-chip" style="text-transform:capitalize;${
+            r.status==="completed" ? "color:var(--green)" :
+            r.status==="notified"  ? "color:var(--accent)" :
+            "color:var(--amber)"
+          }">${r.status}</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+        <div class="status-dot ${r.status}"></div>
+        <button class="btn-delete" onclick="deleteReminder(${r.id})" title="Delete">✕</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+// ── Add Reminder ──────────────────────────────────────────────
+async function addReminder() {
+  const task = document.getElementById("taskInput").value.trim();
+  const date = document.getElementById("dateInput").value;
+  const time = document.getElementById("timeInput").value;
+
+  if (!task)  { toast("Task name is required!", "error"); return; }
+  if (!date)  { toast("Please pick a date!",    "error"); return; }
+  if (!time)  { toast("Please pick a time!",    "error"); return; }
+
+  const btn = document.getElementById("addBtn");
+  btn.disabled = true;
+  btn.classList.add("loading");
+
+  try {
+    const res  = await fetch(`${BASE_URL}/api/reminders`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ task, reminder_date: date, reminder_time: time })
+    });
+    const json = await res.json();
+
+    if (json.success) {
+      toast("Reminder added! 🎉", "success");
+      document.getElementById("taskInput").value = "";
+      setDefaults();
+      await loadStats();
+      if (currentTab === "pending" || currentTab === "all") await loadReminders();
+      tg?.HapticFeedback?.notificationOccurred("success");
+    } else {
+      toast(json.error || "Failed to add reminder.", "error");
+    }
+  } catch(e) {
+    toast("Network error!", "error");
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove("loading");
+  }
+}
+
+// ── Mark Complete ─────────────────────────────────────────────
+async function markComplete(id) {
+  const card = document.getElementById(`card-${id}`);
+  if (!card) return;
+
+  const check = card.querySelector(".task-check");
+  if (check.classList.contains("done")) {
+    toast("Already completed!", "info");
+    return;
+  }
+
+  try {
+    const res  = await fetch(`${BASE_URL}/api/reminders/${id}/complete`, { method: "PUT" });
+    const json = await res.json();
+
+    if (json.success) {
+      check.classList.add("done");
+      card.querySelector(".task-name").classList.add("completed");
+      toast("Task marked complete! ✅", "success");
+      tg?.HapticFeedback?.notificationOccurred("success");
+      setTimeout(async () => {
+        card.classList.add("removing");
+        setTimeout(async () => {
+          await loadStats();
+          await loadReminders();
+        }, 250);
+      }, 600);
+    } else {
+      toast(json.error || "Failed!", "error");
+    }
+  } catch(e) {
+    toast("Network error!", "error");
+  }
+}
+
+// ── Delete Reminder ───────────────────────────────────────────
+async function deleteReminder(id) {
+  const card = document.getElementById(`card-${id}`);
+  if (!card) return;
+
+  try {
+    const res  = await fetch(`${BASE_URL}/api/reminders/${id}`, { method: "DELETE" });
+    const json = await res.json();
+
+    if (json.success) {
+      card.classList.add("removing");
+      setTimeout(async () => {
+        await loadStats();
+        await loadReminders();
+      }, 260);
+      toast("Reminder deleted.", "info");
+      tg?.HapticFeedback?.impactOccurred("medium");
+    } else {
+      toast(json.error || "Delete failed!", "error");
+    }
+  } catch(e) {
+    toast("Network error!", "error");
+  }
+}
+
+// ── Tab Switch ────────────────────────────────────────────────
+function switchTab(tab, el) {
+  currentTab = tab;
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  el.classList.add("active");
+  document.getElementById("reminderList").innerHTML =
+    `<div class="skeleton"></div><div class="skeleton"></div>`;
+  loadReminders();
+}
+
+// ── Enter key on task input ────────────────────────────────────
+document.getElementById("taskInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") addReminder();
+});
+
+// ── Init ──────────────────────────────────────────────────────
+(async () => {
+  setGreeting();
+  setDefaults();
+  await Promise.all([loadStats(), loadReminders()]);
+  // Auto-refresh every 60 seconds
+  setInterval(() => { loadStats(); loadReminders(); }, 60_000);
+})();
+</script>
+</body>
+</html>
